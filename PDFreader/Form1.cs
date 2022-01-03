@@ -22,20 +22,31 @@ using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Net;
+using OpenQA.Selenium.Support.UI;
 
 namespace PDFreader
 {
     public struct Paper
     {
         public string name;
+        public string doi;
         public Dictionary<string, int> words;
-        public int len;
+        public int len;//load
         public float mass;
         public Paper(string _name)
         {
             name = _name;
+            doi = "";
             words = null;
             mass = 0;
+            len = 0;
+        }
+        public Paper(string _name,string _doi, int _load )
+        {
+            name = _name;
+            doi = _doi;
+            words = null;
+            mass = _load;
             len = 0;
         }
         public void addMass(float _mass)
@@ -49,10 +60,89 @@ namespace PDFreader
         public Form1()
         {
             InitializeComponent();
-             transcrYandexMany("glossary.txt");
+            var json_path = "Papers_Stereo.json";
 
+            //doiFromResearchGateMany(json_path);
+            loadSciHubMany(json_path);
+        }
+        void doiFromResearchGateMany(string json_path)
+        {
+            var papers = loadFronJson(json_path);
+            int len = papers.Length;
+            int batch_size = 100;
+            for(int i =1084; i<len; i+= batch_size)
+            {
+                ChromeOptions opt = new ChromeOptions();
+                opt.PageLoadStrategy = PageLoadStrategy.None;
+                var driver = new ChromeDriver(@"C:\brouser", opt);
+                doiFromResearchGateMany(driver, json_path,i,batch_size);
+                driver.Close();
+                driver.Dispose();
+                Thread.Sleep(30000);
+            }
+            
         }
 
+        void loadSciHubMany(string json_path)
+        {
+            var papers = loadFronJson(json_path);
+            int len = papers.Length;
+            int batch_size = 10;
+            for (int i = 39; i < len; i += batch_size)
+            {
+                downloadOneArticleFromScihubWait( json_path, i, batch_size);
+                Thread.Sleep(30000);
+            }
+
+        }
+        void PapersFromSciHubManyJson(string json_path)
+        {
+            var papers = loadFronJson(json_path);
+            var driver = new ChromeDriver(@"C:\brouser");
+            for (int i = 0; i < papers.Length; i++)
+            {
+                var paper = papers[i];
+                var doi = paper.doi;
+                if(doi.Length>2)
+                {
+                    Console.WriteLine(doi[0]+" "+doi);
+                    if(doi[0]=='1')
+                    {
+                        var ret = downloadOneArticleFromScihub(driver, doi);
+                        papers[i] = new Paper(paper.name,paper.doi,ret);
+                        saveToJson(papers.ToList(), json_path);
+                    }
+                   
+                }
+                            
+            }
+            driver.Close();
+            driver.Dispose();
+        }
+        void doiFromResearchGateMany(IWebDriver driver,string json_path,int start_ind, int batch_size)
+        {
+            var papers = loadFronJson(json_path);
+            //loginResearchGate(driver);
+
+            for (int i = 0; i < batch_size; i++)
+            {
+                var ind = start_ind + i;
+                var paper = papers[ind];                
+                var doi = "";
+                try
+                {
+                    doi = learnDoiArticleFromGoogleResearchGate(driver, paper.name);
+                }
+                catch
+                {
+
+                }
+                var doi_paper = new Paper(paper.name);
+                doi_paper.doi = doi;
+                papers[ind] = doi_paper;
+                saveToJson(papers.ToList(), json_path);         
+            }
+        }
         #region translate_with_transcription
         void transcrYandexMany(string path)
         {
@@ -145,9 +235,69 @@ namespace PDFreader
         }
         #endregion
         #region articles
+        bool findBegDelim(char symb)
+        {
+            if(symb == '(')
+            {
+                return true;
+            }
+            return false;
+        }
+        bool findEndDelim(char symb)
+        {
+            if (symb == ')')
+            {
+                return true;
+            }
+            return false;
+        }
+        bool conditionDelim(string text)
+        {
+            int age = 0;
+            var ret = Int32.TryParse(text, out age);
+            if(ret)
+            {
+                if(age>1920 && age < 2030)
+                {
+                    return true;
+                }
+            }
+            return false ;
+        }
+       
+        string[] parseNameArtFromText_withoutKvSk(string text)
+        {
+            List<string> art_names = new List<string>();
+            var lenDelim = 5;
+            var ind = 0;
+            for(int i=0; i<text.Length; i++)
+            {
+                if(findBegDelim(text[i]))
+                {
+                    if (findEndDelim(text[i + lenDelim]) && conditionDelim(text.Substring(i+1,4)))
+                    {
+                        //Console.WriteLine("Find :"  + text.Substring(i, 40));
+                        if(text.Length>250)
+                        {
+                            var _name = text.Substring(i + 8, 240);
+                            var name = _name.Split(new char[] { '.' })[0];
+                            art_names.Add(name);
+                        }
+                        
+                        //Console.WriteLine(name);
+                        //Console.WriteLine("__________________--");
+                        
+                    }
+                    ind++;
+                }
+            }
+            Console.WriteLine("ART LEN: " + art_names.Count+ " ind: " + ind+ " text.Length: " + text.Length);
+            return art_names.ToArray();
+        }
         string[] parseNameArtFromText(string text)
         {
             int indexRef = text.LastIndexOf("References");
+            Console.WriteLine(indexRef);
             text = text.Remove(0, indexRef);
             string[] references = text.Split(new char[] { '\n' });
             List<string> ref_parse = new List<string>();
@@ -211,7 +361,65 @@ namespace PDFreader
             }
             return files;
         }
+        public void loginResearchGate(IWebDriver driver)
+        {           
+            driver.Navigate().GoToUrl("https://www.researchgate.net/login?");
+            Thread.Sleep(2000);
+            string email = "";
+            string password = "";
+            IWebElement element = driver.FindElement(By.XPath("//*[@id='input-login']"));
+            element.SendKeys(email);
+            element = driver.FindElement(By.XPath("//*[@id='input-password']"));
+            element.SendKeys(password);
+            element = driver.FindElement(By.XPath("//*[@data-testid = 'loginCta']"));
+            element.Click();
+            
+        }
+        public string learnDoiArticleFromResearchGate(string artName)
+        {
+            IWebDriver driver = new ChromeDriver(@"C:\brouser");
+            string doi = learnDoiArticleFromResearchGate(driver, artName);
+            return doi;
+        }
+        public string learnDoiArticleFromGoogleResearchGate(IWebDriver driver, string artName)
+        {
+            string doi = "";
+            driver.Navigate().GoToUrl("https://www.google.com/");
+            Thread.Sleep(700);
+            IWebElement element = driver.FindElement(By.XPath("//*[@class='gLFyf gsfi']"));
+            element.SendKeys(artName+" researchgate");
+            element.SendKeys(Keys.Return);
+            Thread.Sleep(1000);
+            element = driver.FindElement(By.XPath("//*[@id='search']//div[1]//div[1]//div[1]//div[1]//div[1]//div[1]//a[1]")); 
+            driver.Navigate().GoToUrl(element.GetProperty("href"));
+            Thread.Sleep(3500);
+            element = driver.FindElement(By.XPath("//*[@class='research-detail-header-section__metadata']//div[2]//a[1]"));
 
+            doi = element.Text;
+
+            //Console.WriteLine(doi);
+            return doi;
+        }
+            public string learnDoiArticleFromResearchGate(IWebDriver driver, string artName)
+        {
+            string doi = "";
+            driver.Navigate().GoToUrl("https://www.researchgate.net/");
+            Thread.Sleep(100);
+            IWebElement element = driver.FindElement(By.XPath("//*[@class='header-search__bar-button']"));
+            element.Click();
+            Thread.Sleep(500);
+            element = driver.FindElement(By.XPath("//*[@class='search-container__form-input']"));
+            element.SendKeys(artName);
+            Thread.Sleep(500);
+            element.SendKeys(Keys.Return);//list papers
+            Thread.Sleep(1500);
+            element = driver.FindElement(By.XPath("//*[@class='nova-legacy-e-text nova-legacy-e-text--size-l nova-legacy-e-text--family-sans-serif nova-legacy-e-text--spacing-none nova-legacy-e-text--color-inherit nova-legacy-e-text--clamp-3 nova-legacy-v-publication-item__title']//a[1]"));
+            element.Click();
+            Thread.Sleep(500);
+            element = driver.FindElement(By.XPath("//*[@class='nova-legacy-e-link nova-legacy-e-link--color-inherit nova-legacy-e-link--theme-decorated']"));
+            doi = element.Text;
+            return doi;
+        }
         public string learnDoiArticleFromPubmed(IWebDriver driver, string artName)
         {
             string doi = "";
@@ -253,24 +461,139 @@ namespace PDFreader
             string doi = learnDoiArticleFromPubmed(driver, artName);
             return doi;
         }
-        public int downloadOneArticleFromScihub(IWebDriver driver, string name)
+
+
+
+
+
+
+        public void downloadOneArticleFromScihubWait(string json_path,int star_ind,int bath_size)
         {
-            driver.Navigate().GoToUrl("https://sci-hub.do");
-            Thread.Sleep(2000);
-            IWebElement element = driver.FindElement(By.XPath("//*[@type= 'textbox' ]"));
-            element.SendKeys(name);
-            element = driver.FindElement(By.XPath("//*[@id= 'open' ]"));
-            element.Click();
-            Thread.Sleep(2000);
+            var papers = loadFronJson(json_path);
+            ChromeOptions opt = new ChromeOptions();
+
+            opt.PageLoadStrategy = PageLoadStrategy.None;
+            var driver = new ChromeDriver(@"C:\brouser", opt);
+            string url = "https://sci-hub.ru";
+            for (int i = 0; i < bath_size; i++)
+            {
+                var open = false;
+                newTabcea(driver, url);
+                while (open==false)
+                {
+                    //newTabcea(driver, url);
+                    open = checkAllTabcea(driver);
+                    if(open==false)
+                    {
+                        newTabcea(driver, url);
+                    }
+                    Thread.Sleep(2000);
+                }
+                int ind = i + star_ind;
+                var paper = papers[ind];
+                var doi = paper.doi;
+                if (doi.Length > 2)
+                {
+                    Console.WriteLine(ind + " " + doi);
+                    if (doi[0] == '1')
+                    {
+                        Console.WriteLine(driver.PageSource.Length);
+                        openArticle(driver, doi);
+                        Thread.Sleep(5000);
+                        //var ret = clickLoad(driver, doi);
+                        manualDownload();
+                        Thread.Sleep(1000);
+                        driver.Close();
+                        //closeLastPage(driver);
+                        papers[ind] = new Paper(paper.name, paper.doi, 0);
+                        saveToJson(papers.ToList(), json_path);
+                        
+                    }
+
+                }
+
+            }
+           // driver.Close();
+            driver.Dispose();
+        }
+        void manualDownload()
+        {
+            Left_Click(new Point(833, 161));
+            Thread.Sleep(1000);
+            Left_Click(new Point(805, 516));
+            //SendKeys.SendWait("{Enter}");
+        }
+        void newTabcea(IWebDriver driver,string url)
+        {
+            if(driver.WindowHandles.Count<50)
+            {
+                driver.SwitchTo().Window(driver.WindowHandles.Last());
+                ((IJavaScriptExecutor)driver).ExecuteScript("window.open();");
+                driver.SwitchTo().Window(driver.WindowHandles.Last());
+                driver.Navigate().GoToUrl(url);
+            }
+            
+        }
+        bool checkAllTabcea(IWebDriver driver)
+        {
+            var pages = driver.WindowHandles;
+
+            bool check_page = false;
+            for (int i=0; i<pages.Count;i++)
+            {
+                driver.SwitchTo().Window(pages[i]);
+                check_page = checkTabcea(driver);
+                if (check_page)
+                {
+                    return check_page;
+                }
+            }            
+            return check_page;
+        }
+        bool checkTabcea(IWebDriver driver)
+        {
+
+            //var check_page = ((IJavaScriptExecutor)driver).ExecuteScript("return document.readyState").Equals("complete");
+            return driver.PageSource.Length>30000 && driver.PageSource.Length < 31000;
+        }
+        int clickLoad(IWebDriver driver, string name)
+        {
             try
             {
-                IWebElement element_ref = driver.FindElement(By.XPath("//*[@href= '#' ]"));
+                IWebElement element_ref = driver.FindElement(By.XPath("//*[@id='buttons']//button[1]"));
                 element_ref.Click();
+                return 1;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
             }
+            return 0;
+        }
+        void openArticle(IWebDriver driver, string name)
+        {
+            IWebElement element = driver.FindElement(By.XPath("//*[@type= 'textbox' ]"));
+            element.SendKeys(name);
+            element = driver.FindElement(By.XPath("//*[@id= 'open' ]"));
+            element.Click();
+        }
+        public int downloadOneArticleFromScihub(IWebDriver driver, string name)
+        {
+            int error = 0;
+            driver.Navigate().GoToUrl("https://sci-hub.ru");
+            IWebElement element = driver.FindElement(By.XPath("//*[@type= 'textbox' ]"));
+            element.SendKeys(name);
+            element = driver.FindElement(By.XPath("//*[@id= 'open' ]"));
+            element.Click();
+            try
+            {
+                IWebElement element_ref = driver.FindElement(By.XPath("//*[@id='buttons']//button[1]"));
+                element_ref.Click();
+            }
+            catch (Exception e)
+            {
+                error = 1;
+            }         
             return 1;
         }
         public int downloadManyArticleFromScihub(string[] name)
@@ -279,7 +602,7 @@ namespace PDFreader
             foreach (string name_art in name)
             {
                 int error = 0;
-                driver.Navigate().GoToUrl("https://sci-hub.do");
+                driver.Navigate().GoToUrl("https://sci-hub.ru");
                 IWebElement element = driver.FindElement(By.XPath("//*[@type= 'textbox' ]"));
                 element.SendKeys(name_art);
                 element = driver.FindElement(By.XPath("//*[@id= 'open' ]"));
@@ -312,7 +635,7 @@ namespace PDFreader
             string path_art = @"C:\Users\Dell\Desktop\patents";
             string[] keyw = { "scan", "laser", "сканир", "лазер" };
             // var papers = scanManyPdf(@"C:\Users\Dell\Desktop\учёба\асп\Кандидатская\лазерные сканеры\патенты", keyw);
-            var papers = loadFronJson();
+            var papers = loadFronJson("Papers.json");
             for (int i = 0; i < papers.Length; i++)
             {
                 if (papers[i].len != 0)
@@ -494,21 +817,22 @@ namespace PDFreader
         #endregion
 
         #region pdf
-        public string ReadPDF(string path)
+        public string ReadPDF(string path,int startPage = 0)
         {
             using (PdfReader reader = new PdfReader(path))
             {
                 string text = "";
+                StringBuilder stringBuilder = new StringBuilder();
                 ITextExtractionStrategy its = new iTextSharp.text.pdf.parser.SimpleTextExtractionStrategy();
-                for (int i = 1; i <= reader.NumberOfPages; i++)
-                {
-                    text += PdfTextExtractor.GetTextFromPage(reader, i, its);
+                for (int i = startPage; i <= reader.NumberOfPages; i++)
+                {                                      
+                   PdfTextExtractor.GetTextFromPage(reader, i, its);
                     if (i == reader.NumberOfPages)
                     {
-                        text = PdfTextExtractor.GetTextFromPage(reader, i, its);
+                        stringBuilder.Append(PdfTextExtractor.GetTextFromPage(reader, i, its));
                     }
                 }
-                return text;
+                return stringBuilder.ToString();
             }
         }
         public Paper[] sortPapers(Paper[] papers,string key)
@@ -547,25 +871,25 @@ namespace PDFreader
                 listPaper.Add(paper);
 
             }
-            saveToJson(listPaper);
+            saveToJson(listPaper, "Papers.json");
             return listPaper;
         }
-        void saveToJson(List<Paper> listPaper)
+        void saveToJson(List<Paper> listPaper,string path)
         {
             JsonSerializer serializer = new JsonSerializer();
             serializer.NullValueHandling = NullValueHandling.Ignore;
             serializer.Formatting = Formatting.Indented;
 
-            using (StreamWriter sw = new StreamWriter("Papers.json"))
+            using (StreamWriter sw = new StreamWriter(path))
             using (JsonWriter writer = new JsonTextWriter(sw))
             {
                 serializer.Serialize(writer, listPaper);
             }
         }
-        Paper[] loadFronJson()
+        Paper[] loadFronJson(string path)
         {
             string jsontext = "";
-            using (StreamReader file = File.OpenText("Papers.json"))
+            using (StreamReader file = File.OpenText(path))
             {
                 jsontext = file.ReadToEnd();
             }
