@@ -61,9 +61,9 @@ namespace PDFreader
         {
             InitializeComponent();
             var json_path = "Papers_Stereo.json";
-
+            translOneWord("paper");
             //doiFromResearchGateMany(json_path);
-            loadSciHubMany(json_path);
+           // loadSciHubMany(json_path);
         }
         void doiFromResearchGateMany(string json_path)
         {
@@ -143,6 +143,8 @@ namespace PDFreader
                 saveToJson(papers.ToList(), json_path);         
             }
         }
+
+
         #region translate_with_transcription
         void transcrYandexMany(string path)
         {
@@ -234,6 +236,7 @@ namespace PDFreader
             return new string[2]{ "",""};
         }
         #endregion
+
         #region articles
         bool findBegDelim(char symb)
         {
@@ -400,7 +403,7 @@ namespace PDFreader
             //Console.WriteLine(doi);
             return doi;
         }
-            public string learnDoiArticleFromResearchGate(IWebDriver driver, string artName)
+        public string learnDoiArticleFromResearchGate(IWebDriver driver, string artName)
         {
             string doi = "";
             driver.Navigate().GoToUrl("https://www.researchgate.net/");
