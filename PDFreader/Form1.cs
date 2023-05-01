@@ -23,6 +23,8 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Net;
 using OpenQA.Selenium.Support.UI;
+using Microsoft.WindowsAPICodePack.Shell;
+using Microsoft.WindowsAPICodePack.Shell.PropertySystem;
 
 namespace PDFreader
 {
@@ -61,10 +63,14 @@ namespace PDFreader
         {
             InitializeComponent();
             var json_path = "Papers_Stereo.json";
-            translOneWord("paper");
+            set_name_m();
+            //transcrYandexMany("words_in.txt");
             //doiFromResearchGateMany(json_path);
-           // loadSciHubMany(json_path);
+            // loadSciHubMany(json_path);
         }
+
+
+
         void doiFromResearchGateMany(string json_path)
         {
             var papers = loadFronJson(json_path);
@@ -148,6 +154,8 @@ namespace PDFreader
         #region translate_with_transcription
         void transcrYandexMany(string path)
         {
+            IWebDriver driver = new ChromeDriver(@"C:\brouser");
+            driver.Navigate().GoToUrl("https://myefe.ru/anglijskaya-transkriptsiya.html");
             string file1;
             using (StreamReader sr = new StreamReader(path))
             {
@@ -158,9 +166,10 @@ namespace PDFreader
             List<string> transl = new List<string>();
             List<string> words = new List<string>();
             int ind = 0;
-           for (int i=0;i<20;i++)
+           for (int i=100;i< lines.Length; i++)
             {
-               var tr = transcrYandexOne(lines[i]);
+
+               var tr = translOneWord_Normal(lines[i], driver);
                 if(tr!=null)
                 {
                     transc.Add(tr[0]);
@@ -207,12 +216,10 @@ namespace PDFreader
                 {
                     var trsl = trsJson.def[0].tr[0].text;
                     var trscr = trsJson.def[0].ts;
-                    return new string[2] { trsl, trscr };
-                    
+                    return new string[2] { trsl, trscr };                    
                 }
                 catch
                 {
-
                 }
             }
             return null;
@@ -227,13 +234,53 @@ namespace PDFreader
             element = driver.FindElement(By.XPath("//*[@type= 'submit' ]"));
             element.Click();
             Thread.Sleep(2000);
-            element = driver.FindElement(By.XPath("//*[@class= 'ml-item' ]"));
+            element = driver.FindElement(By.XPath("//*[@class= 'ml-item' ]/span"));
             string trans = element.Text;
-            foreach(sbyte a in trans)
+            element = driver.FindElement(By.XPath("//*[@class= 'thirteen wide column' ]"));
+
+            string translate = element.Text;
+            Console.WriteLine(trans);
+            Console.WriteLine(translate);
+            return new string[2]{ trans, translate };
+        }
+
+        string[] translOneWord_Normal(string word, IWebDriver driver)
+        {
+            try
             {
-                Console.WriteLine(a);
+                IWebElement element = driver.FindElement(By.XPath("//*[@id= 'mlsw7-main-search-input' ]"));
+
+                element.SendKeys(Keys.Control + "a");
+                element.SendKeys(Keys.Delete);
+                element.SendKeys(word);
+
+                //element = driver.FindElement(By.XPath("//*[@class= 'ui basic primary disabled button mlsw7-search-action' ]"));
+                element = driver.FindElement(By.XPath("//*[@type= 'submit' ]"));
+                element.Click();
+                Thread.Sleep(500);
+
+                element = driver.FindElement(By.XPath("//*[@class= 'ml-item' ]/span"));
+                string trans = element.Text;
+                element = driver.FindElement(By.XPath("//*[@class= 'thirteen wide column' ]"));
+                string translate = element.Text;
+                Console.WriteLine(trans);
+                Console.WriteLine(translate);
+                return new string[2] { trans, translate };
             }
-            return new string[2]{ "",""};
+            catch
+            {
+                return new string[] { "null", "null" };
+            }
+            
+        }
+        void PrintChars(string s)
+        {
+            Console.WriteLine($"\"{s}\".Length = {s.Length}");
+            for (int i = 0; i < s.Length; i++)
+            {
+                Console.WriteLine($"s[{i}] = '{s[i]}' ('\\u{(int)s[i]:x4}')");
+            }
+            Console.WriteLine();
         }
         #endregion
 
@@ -1038,6 +1085,60 @@ namespace PDFreader
             mouse_event(MouseFlags.Absolute | MouseFlags.LeftUp, x, y, 0, UIntPtr.Zero);
 
         }
+        #endregion
+
+
+        #region another
+
+        void set_name_m()
+        {
+            var path1 = @"D:\sort_music 2\1";
+            var files = Directory.GetFiles(path1);
+            foreach(var path in files)
+            {
+                var file1 = ShellFile.FromFilePath(path);
+                var name = file1.Properties.System.ApplicationName;
+                try
+                {
+                    file1.Properties.System.Title.Value = file1.Properties.System.FileName.Value;
+                }
+                catch(Exception e)
+                {
+                    ShellPropertyWriter propertyWriter = file1.Properties.GetPropertyWriter();
+                    propertyWriter.WriteProperty(SystemProperties.System.Title, new string[] { file1.Properties.System.FileName.Value });
+                    propertyWriter.Close();
+                    Console.WriteLine(e.Message);
+                }
+                
+            }
+            
+            /* var names =
+                 (from idx in Enumerable.Range(0, short.MaxValue)
+                  let key = folder.GetDetailsOf(null, idx)
+                  where !string.IsNullOrEmpty(key)
+                  select (idx, key)).ToDictionary(p => p.idx, p => p.key);
+
+             var properties =
+                 (from idx in names.Keys
+                  orderby idx
+                  let value = folder.GetDetailsOf(folderItem, idx)
+                  where !string.IsNullOrEmpty(value)
+                  select (name: names[idx], value)).ToList();
+
+             foreach (var kvp in properties)
+                 if(kvp.name.Contains("Название"))
+                 {
+                     Console.WriteLine($"{kvp.name}: {kvp.value}");
+                 }
+             */
+
+            //var f1 = f.
+            //Console.WriteLine(f);
+            //Console.WriteLine(file);
+
+
+        }
+
         #endregion
     }
 }
