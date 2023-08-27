@@ -1092,7 +1092,7 @@ namespace PDFreader
 
         void set_name_m()
         {
-            var path1 = @"D:\sort_music 2\1";
+            var path1 = @"D:\Music\osu7";
             var files = Directory.GetFiles(path1);
             foreach(var path in files)
             {
