@@ -1092,22 +1092,33 @@ namespace PDFreader
 
         void set_name_m()
         {
-            var path1 = @"D:\Music\osu7";
+            var path1 = @"D:\Music\osu8";
             var files = Directory.GetFiles(path1);
             foreach(var path in files)
             {
                 var file1 = ShellFile.FromFilePath(path);
                 var name = file1.Properties.System.ApplicationName;
+                Console.WriteLine(file1.Properties.System.FileName.Value);
                 try
                 {
                     file1.Properties.System.Title.Value = file1.Properties.System.FileName.Value;
                 }
                 catch(Exception e)
                 {
-                    ShellPropertyWriter propertyWriter = file1.Properties.GetPropertyWriter();
-                    propertyWriter.WriteProperty(SystemProperties.System.Title, new string[] { file1.Properties.System.FileName.Value });
-                    propertyWriter.Close();
                     Console.WriteLine(e.Message);
+                    try
+                    {
+                        ShellPropertyWriter propertyWriter = file1.Properties.GetPropertyWriter();
+                        propertyWriter.WriteProperty(SystemProperties.System.Title, new string[] { file1.Properties.System.FileName.Value });
+                        propertyWriter.Close();
+                    }
+                    catch (Exception e2)
+                    {
+                        Console.WriteLine(e2.Message);
+
+
+                    }
+
                 }
                 
             }
