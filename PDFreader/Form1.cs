@@ -63,7 +63,11 @@ namespace PDFreader
         {
             InitializeComponent();
             var json_path = "Papers_Stereo.json";
-            set_name_m();
+
+             //scanManyPdf(@"D:\patents", new string[] { "laser","scanner","camera","micriscope","mirror", "measurement", "vision" }, "papers_1");
+           Console.WriteLine( ReadPDF("paper.pdf"));
+           // test_sort(); 
+            //set_name_m();
             //transcrYandexMany("words_in.txt");
             //doiFromResearchGateMany(json_path);
             // loadSciHubMany(json_path);
@@ -682,7 +686,7 @@ namespace PDFreader
         #region patent
         private void button1_Click(object sender, EventArgs e)
         {
-            string path_art = @"C:\Users\Dell\Desktop\patents";
+            string path_art = @"D:\patents";
             string[] keyw = { "scan", "laser", "сканир", "лазер" };
             // var papers = scanManyPdf(@"C:\Users\Dell\Desktop\учёба\асп\Кандидатская\лазерные сканеры\патенты", keyw);
             var papers = loadFronJson("Papers.json");
@@ -695,7 +699,7 @@ namespace PDFreader
                         papers[i].mass += (float)papers[i].words[key] / (float)papers[i].len;
                     }
                 }
-
+                
             }
 
 
@@ -709,6 +713,37 @@ namespace PDFreader
             }
             Console.WriteLine("END");
         }
+
+        void test_sort()
+        {
+            string path_art = @"D:\patents";
+            string[] keyw = { "scan", "laser"};
+            // var papers = scanManyPdf(@"C:\Users\Dell\Desktop\учёба\асп\Кандидатская\лазерные сканеры\патенты", keyw);
+            var papers = loadFronJson("Papers.json");
+            for (int i = 0; i < papers.Length; i++)
+            {
+                if (papers[i].len != 0)
+                {
+
+                    if (papers[i].words["scan"] > 10 && papers[i].words["laser"] > 10) 
+                        papers[i].mass = (papers[i].words["scan"] + papers[i].words["laser"]) / (float)papers[i].len;
+                }
+                Console.WriteLine(i + "/" + papers.Length);
+            }
+
+
+            var sortedpapers = sortPapers(papers);
+            string folder = "sort2";
+            Directory.CreateDirectory(System.IO.Path.Combine(path_art, folder));
+            for (int i = sortedpapers.Length - 1; i > sortedpapers.Length - 100; i--)
+            {
+
+                Console.WriteLine(sortedpapers[i].name + ": " + sortedpapers[i].mass);
+                File.Copy(System.IO.Path.Combine(path_art, sortedpapers[i].name), System.IO.Path.Combine(path_art, folder, (sortedpapers.Length + 1 - i).ToString() + "_" + sortedpapers[i].name));
+            }
+            Console.WriteLine("END");
+        }
+
         public int downloadOnePatentFromGoogle(string name)
         {
             IWebDriver driver = new ChromeDriver(@"C:\brouser");
@@ -869,14 +904,20 @@ namespace PDFreader
         #region pdf
         public string ReadPDF(string path,int startPage = 0)
         {
+            
             using (PdfReader reader = new PdfReader(path))
             {
                 string text = "";
                 StringBuilder stringBuilder = new StringBuilder();
                 ITextExtractionStrategy its = new iTextSharp.text.pdf.parser.SimpleTextExtractionStrategy();
                 for (int i = startPage; i <= reader.NumberOfPages; i++)
-                {                                      
-                   PdfTextExtractor.GetTextFromPage(reader, i, its);
+                {
+                   // try{
+                        PdfTextExtractor.GetTextFromPage(reader, i);
+                   // }
+                   // catch(Exception e){ MessageBox.Show(e.Message); }
+
+                  
                     if (i == reader.NumberOfPages)
                     {
                         stringBuilder.Append(PdfTextExtractor.GetTextFromPage(reader, i, its));
@@ -884,7 +925,9 @@ namespace PDFreader
                 }
                 return stringBuilder.ToString();
             }
+
         }
+
         public Paper[] sortPapers(Paper[] papers,string key)
         {
             var sortedPapers = from u in papers
@@ -900,10 +943,11 @@ namespace PDFreader
             return sortedPapers.ToArray();
         }
 
-        public List<Paper> scanManyPdf(string path, string[] keywords)
+        public List<Paper> scanManyPdf(string path, string[] keywords,string name = "Papers")
         {
             var listPaper = new List<Paper>();
             string[] files = Directory.GetFiles(path);
+            int i = 0; 
             foreach (string filename in files)
             {
                 var text = ReadPDF(filename);
@@ -919,9 +963,11 @@ namespace PDFreader
                     paper.words.Add(word, match.Count);
                 }
                 listPaper.Add(paper);
+                Console.WriteLine(i + "/" + files.Length);
+                i++;
 
             }
-            saveToJson(listPaper, "Papers.json");
+            saveToJson(listPaper, name+".json");
             return listPaper;
         }
         void saveToJson(List<Paper> listPaper,string path)
