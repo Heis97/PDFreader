@@ -65,9 +65,9 @@ namespace PDFreader
             var json_path = "Papers_Stereo.json";
 
              //scanManyPdf(@"D:\patents", new string[] { "laser","scanner","camera","micriscope","mirror", "measurement", "vision" }, "papers_1");
-           Console.WriteLine( ReadPDF("paper.pdf"));
+         //  Console.WriteLine( ReadPDF("paper.pdf"));
            // test_sort(); 
-            //set_name_m();
+            set_name_m();
             //transcrYandexMany("words_in.txt");
             //doiFromResearchGateMany(json_path);
             // loadSciHubMany(json_path);
@@ -1138,7 +1138,7 @@ namespace PDFreader
 
         void set_name_m()
         {
-            var path1 = @"D:\Music\osu8";
+            var path1 = @"D:\music\osu9";
             var files = Directory.GetFiles(path1);
             foreach(var path in files)
             {
