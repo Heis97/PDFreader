@@ -1138,7 +1138,7 @@ namespace PDFreader
 
         void set_name_m()
         {
-            var path1 = @"D:\music\osu9";
+            var path1 = @"D:\music\sort_music 2";
             var files = Directory.GetFiles(path1);
             foreach(var path in files)
             {
